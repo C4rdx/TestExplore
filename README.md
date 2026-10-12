@@ -871,7 +871,18 @@ TestExplore/
 │   └── ConsoleReporter.cpp
 │
 └── tests/
-    └── main.cpp
+    ├── main.cpp
+    ├── test_registration.cpp
+    ├── test_registration.hpp
+    ├── test_assertions.cpp
+    ├── test_assertions.hpp
+    ├── test_runner.cpp
+    ├── test_runner.hpp
+    ├── test_exceptions.cpp
+    ├── test_exceptions.hpp
+    ├── test_stability.cpp
+    └── test_stability.hpp
+
 ```
 
 ### Current Executables
@@ -913,7 +924,7 @@ The framework is designed to remain dependency-free and rely primarily on the C+
 Clone the repository:
 
 ```bash
-git clone https://github.com/kheibar313/TestExplore.git
+git clone https://github.com/C4rdx/TestExplore.git
 cd TestExplore
 ```
 
