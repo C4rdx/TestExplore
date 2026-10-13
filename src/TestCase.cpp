@@ -1,16 +1,20 @@
+
 #include <TestExplorer/TestCase.hpp>
 #include <TestExplorer/TestContext.hpp>
 
+#include <utility>
+
 namespace testexplorer
 {
-
     TestCase::TestCase(
         std::string id,
         std::string name,
-        TestFunction function)
+        TestFunction function,
+        TestMetadata metadata)
         : m_id(std::move(id)),
           m_name(std::move(name)),
-          m_function(std::move(function))
+          m_function(std::move(function)),
+          m_metadata(std::move(metadata))
     {
     }
 
@@ -29,4 +33,8 @@ namespace testexplorer
         return m_name;
     }
 
+    const TestMetadata &TestCase::metadata() const
+    {
+        return m_metadata;
+    }
 }

@@ -2,6 +2,8 @@
 
 #include <TestExplorer/TestCase.hpp>
 #include <TestExplorer/TestResult.hpp>
+#include <TestExplorer/TestFilters.hpp>
+#include <TestExplorer/TestRegistry.hpp>
 
 #include <string>
 #include <vector>
@@ -143,12 +145,110 @@ namespace
 
         return true;
     }
+
+    bool verifyMetadataFilters(testexplorer::TestRunner &runner)
+    {
+        testexplorer::TestRegistry registry;
+
+        registry.registerTest(testexplorer::TestCase(
+            "database.connection",
+            "Database Connection",
+            [](testexplorer::TestContext &) {},
+            {"Database", {"integration", "slow"}}));
+
+        registry.registerTest(testexplorer::TestCase(
+            "database.unit",
+            "Database Unit Test",
+            [](testexplorer::TestContext &) {},
+            {"Database", {"unit"}}));
+
+        registry.registerTest(testexplorer::TestCase(
+            "math.addition",
+            "Math Addition",
+            [](testexplorer::TestContext &) {},
+            {"Math", {"unit"}}));
+
+        // Verify backward compatibility with the original 3-argument constructor.
+        registry.registerTest(testexplorer::TestCase(
+            "legacy.test",
+            "Legacy Test",
+            [](testexplorer::TestContext &) {}));
+
+        // Filter by suite.
+        const auto databaseResults = runner.runAll(
+            registry,
+            testexplorer::filters::inSuite("Database"));
+
+        if (databaseResults.size() != 2)
+        {
+            std::cerr << "Self-test error: Database suite should contain 2 tests.\n";
+            return false;
+        }
+
+        // Filter by tag.
+        const auto integrationResults = runner.runAll(
+            registry,
+            testexplorer::filters::hasTag("integration"));
+
+        if (integrationResults.size() != 1 ||
+            integrationResults.front().testId() != "database.connection")
+        {
+            std::cerr << "Self-test error: integration tag filter failed.\n";
+            return false;
+        }
+
+        // Combine suite and tag filters.
+        const auto databaseUnitResults = runner.runAll(
+            registry,
+            [suiteFilter = testexplorer::filters::inSuite("Database"),
+             tagFilter = testexplorer::filters::hasTag("unit")](const testexplorer::TestCase &test)
+            {
+                return suiteFilter(test) && tagFilter(test);
+            });
+
+        if (databaseUnitResults.size() != 1 ||
+            databaseUnitResults.front().testId() != "database.unit")
+        {
+            std::cerr << "Self-test error: combined metadata filters failed.\n";
+            return false;
+        }
+
+        // A nonexistent suite should match no tests.
+        const auto missingSuiteResults = runner.runAll(
+            registry,
+            testexplorer::filters::inSuite("MissingSuite"));
+
+        if (!missingSuiteResults.empty())
+        {
+            std::cerr << "Self-test error: nonexistent suite should match no tests.\n";
+            return false;
+        }
+
+        // The original constructor must remain compatible.
+        const auto legacyResult = runner.run(
+            registry,
+            "legacy.test");
+
+        if (legacyResult.status() != testexplorer::TestStatus::Passed)
+        {
+            std::cerr << "Self-test error: legacy TestCase construction failed.\n";
+            return false;
+        }
+
+        return true;
+    }
 }
 
 bool runRunnerTests(
     testexplorer::TestRunner &runner,
     testexplorer::TestRegistry &registry)
 {
+    // Test suite and tag metadata filters
+    if (!verifyMetadataFilters(runner))
+    {
+        return false;
+    }
+
     // Run all tests
     const auto results =
         runner.runAll(registry);
