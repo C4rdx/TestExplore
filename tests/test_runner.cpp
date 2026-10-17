@@ -4,9 +4,11 @@
 #include <TestExplorer/TestResult.hpp>
 #include <TestExplorer/TestFilters.hpp>
 #include <TestExplorer/TestRegistry.hpp>
+#include <TestExplorer/ConsoleReporter.hpp>
 
 #include <string>
 #include <vector>
+#include <sstream>
 #include <iostream>
 #include <stdexcept>
 
@@ -237,12 +239,108 @@ namespace
 
         return true;
     }
+
+    bool verifyConsoleReporterSummary()
+    {
+        using namespace testexplorer;
+
+        std::ostringstream output;
+        ConsoleReporter reporter(output);
+
+        const std::vector<TestResult> results{
+            TestResult(
+                "summary.passed",
+                "Passed Test",
+                TestStatus::Passed,
+                TestResult::Duration{100},
+                {}),
+            TestResult(
+                "summary.failed",
+                "Failed Test",
+                TestStatus::Failed,
+                TestResult::Duration{200},
+                {}),
+            TestResult(
+                "summary.error",
+                "Error Test",
+                TestStatus::Error,
+                TestResult::Duration{300},
+                {},
+                "Expected error"),
+            TestResult(
+                "summary.skipped",
+                "Skipped Test",
+                TestStatus::Skipped,
+                TestResult::Duration{400},
+                {})};
+
+        reporter.testRunFinished(results);
+
+        const std::string summary = output.str();
+
+        const std::vector<std::string> expectedLines{
+            "Total:    4",
+            "Passed:   1",
+            "Failed:   1",
+            "Errors:   1",
+            "Skipped:  1",
+            "Duration: 1000 ns"};
+
+        for (const std::string &line : expectedLines)
+        {
+            if (summary.find(line) == std::string::npos)
+            {
+                std::cerr
+                    << "Self-test error: missing summary output: "
+                    << line
+                    << '\n';
+
+                return false;
+            }
+        }
+
+        // An empty run must report zero counts and zero duration.
+        std::ostringstream emptyOutput;
+        ConsoleReporter emptyReporter(emptyOutput);
+
+        const std::vector<TestResult> emptyResults;
+        emptyReporter.testRunFinished(emptyResults);
+
+        const std::string emptySummary = emptyOutput.str();
+
+        const std::vector<std::string> expectedEmptyLines{
+            "Total:    0",
+            "Passed:   0",
+            "Failed:   0",
+            "Errors:   0",
+            "Skipped:  0",
+            "Duration: 0 ns"};
+
+        for (const std::string &line : expectedEmptyLines)
+        {
+            if (emptySummary.find(line) == std::string::npos)
+            {
+                std::cerr
+                    << "Self-test error: incorrect empty summary: " << line << '\n';
+
+                return false;
+            }
+        }
+
+        return true;
+    }
 }
 
 bool runRunnerTests(
     testexplorer::TestRunner &runner,
     testexplorer::TestRegistry &registry)
 {
+    // Verify that the console reporter produces a correct test run summary.
+    if (!verifyConsoleReporterSummary())
+    {
+        return false;
+    }
+
     // Test suite and tag metadata filters
     if (!verifyMetadataFilters(runner))
     {
