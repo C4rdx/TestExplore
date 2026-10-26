@@ -52,6 +52,7 @@ add_executable(TestExplorerSelfTests
     tests/test_runner.cpp
     tests/test_exceptions.cpp
     tests/test_stability.cpp
+    tests/test_skipping.cpp
 )
 
 target_link_libraries(TestExplorerSelfTests

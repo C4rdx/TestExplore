@@ -28,7 +28,8 @@ namespace testexplorer
             TestStatus status,
             Duration duration,
             std::vector<TestFailure> failures,
-            std::string errorMessage = {});
+            std::string errorMessage = {},
+            std::string skipReason = {});
 
         const std::string &testId() const;
         const std::string &testName() const;
@@ -38,6 +39,7 @@ namespace testexplorer
 
         const std::vector<TestFailure> &failures() const;
         const std::string &errorMessage() const;
+        const std::string &skipReason() const;
 
     private:
         std::string m_testId;
@@ -48,6 +50,7 @@ namespace testexplorer
 
         std::vector<TestFailure> m_failures;
         std::string m_errorMessage;
+        std::string m_skipReason;
     };
 }
 

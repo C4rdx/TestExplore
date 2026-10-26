@@ -4,6 +4,7 @@
 #include <TestExplorer/TestContext.hpp>
 #include <TestExplorer/TestRegistry.hpp>
 #include <TestExplorer/TestReporter.hpp>
+#include <TestExplorer/TestSkipException.hpp>
 
 #include <chrono>
 #include <stdexcept>
@@ -29,8 +30,7 @@ namespace testexplorer
     {
     }
 
-    TestResult TestRunner::run(
-        const TestCase &test)
+    TestResult TestRunner::run(const TestCase &test)
     {
         if (m_reporter != nullptr)
         {
@@ -54,15 +54,23 @@ namespace testexplorer
 
             TestStatus status = TestStatus::Passed;
             std::string errorMessage;
+            std::string skipReason;
 
             try
             {
                 test.execute(context);
 
-                status =
-                    context.failures().empty()
-                        ? TestStatus::Passed
-                        : TestStatus::Failed;
+                status = context.failures().empty()
+                             ? TestStatus::Passed
+                             : TestStatus::Failed;
+            }
+            catch (const detail::TestSkipException &exception)
+            {
+                skipReason = exception.reason();
+
+                status = context.failures().empty()
+                             ? TestStatus::Skipped
+                             : TestStatus::Failed;
             }
             catch (const std::exception &exception)
             {
@@ -75,8 +83,7 @@ namespace testexplorer
                 errorMessage = "Unknown exception";
             }
 
-            const auto end =
-                std::chrono::steady_clock::now();
+            const auto end = std::chrono::steady_clock::now();
 
             const auto duration =
                 std::chrono::duration_cast<TestResult::Duration>(
@@ -88,7 +95,8 @@ namespace testexplorer
                 status,
                 duration,
                 context.failures(),
-                errorMessage);
+                errorMessage,
+                skipReason);
         }
 
         if (m_reporter != nullptr)

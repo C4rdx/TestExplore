@@ -3,6 +3,7 @@
 #include <TestExplorer/ConsoleReporter.hpp>
 
 #include "test_runner.hpp"
+#include "test_skipping.hpp"
 #include "test_stability.hpp"
 #include "test_assertions.hpp"
 #include "test_exceptions.hpp"
@@ -56,6 +57,11 @@ int main()
             runner,
             registry,
             exceptionRegistry))
+    {
+        return 1;
+    }
+
+    if (!runSkippingTests(runner))
     {
         return 1;
     }

@@ -6,17 +6,18 @@ A lightweight, reusable, dependency-free C++20 testing framework built around a 
 
 ## Overview
 
-**TestExplorer** is an experimental C++ testing framework developed with a focus on:
+**TestExplorer** is an experimental C++ testing framework focused on:
 
 - Clean architecture and separation of responsibilities
 - Reusability and extensibility
-- Explicit test execution and selection
+- Explicit test registration, selection, and execution
 - Assertion failure collection and useful diagnostics
 - Exception-safe test execution
+- Explicit test skipping with a reason
 - Flexible reporting
 - Minimal dependencies
 
-The project is developed incrementally. The core execution model is established first, while higher-level capabilities are introduced as separate, testable milestones.
+The project is developed incrementally. Each milestone introduces capabilities that can be independently tested while preserving the framework's core execution model.
 
 ## Current Features
 
@@ -29,6 +30,8 @@ The project is developed incrementally. The core execution model is established 
 - Per-test execution timing
 - Exception handling and error results
 - Automatic cleanup of the active test context
+- Explicit test skipping with a reason
+- Separate storage for execution errors and skip reasons
 - Test filtering
 - Test suites and tags
 - Single-test execution by ID
@@ -122,7 +125,7 @@ Assertion failures can include:
 - Actual values, where applicable
 - The source location of the assertion
 
-Example failure output:
+Example failure details:
 
 ```text
 Expected values to be equal
@@ -230,9 +233,10 @@ Every test execution produces a `TestResult` containing information such as:
 - Execution status
 - Execution duration
 - Assertion failures
-- Error information when execution throws an exception
+- Error information, when execution throws an exception
+- Skip reason, when the test is skipped
 
-The framework currently defines four statuses:
+The framework defines four statuses:
 
 ```cpp
 enum class TestStatus
@@ -252,9 +256,13 @@ The test completed without assertion failures or execution errors.
 
 The test executed, but one or more assertions failed.
 
+A test that records assertion failures and subsequently requests a skip remains `Failed`. Existing failures must not be hidden by a later skip request.
+
 ### `Skipped`
 
-The test was intentionally not executed. Automatic skip-selection mechanisms may be expanded in future milestones.
+The test explicitly requested to stop execution without completing normally by calling `TestContext::skip(reason)`.
+
+The reason is stored separately from execution errors and can be accessed through `TestResult::skipReason()`.
 
 ### `Error`
 
@@ -273,22 +281,80 @@ TestCase connectionTest(
 );
 ```
 
-For standard exceptions, the error message is obtained from `what()` and exposed through the result's `errorMessage()` accessor. For unknown exception types, the current fallback message is:
+For standard exceptions, the error message is obtained from `what()` and exposed through the result's `errorMessage()` accessor. For unknown exception types, the fallback message is:
 
 ```text
 Unknown exception
 ```
 
-Assertion failures and execution errors are represented separately: assertion failures belong to the test context and result, while an execution exception produces the `Error` status.
+Assertion failures, skip requests, and execution errors represent different outcomes:
 
-Example of inspecting an error result:
+- Assertion failures are collected as `TestFailure` objects.
+- Skip requests produce `Skipped` results when no assertion failures have already occurred.
+- Execution exceptions produce `Error` results.
+- A test with recorded assertion failures remains `Failed`, even if it subsequently requests a skip.
+
+---
+
+## Test Skipping
+
+TestExplorer supports explicitly skipping a test from within its test body.
+
+This is useful when a test cannot meaningfully continue because a prerequisite is unavailable, an external service is inaccessible, or a required condition is not satisfied.
+
+### Requesting a Skip
+
+Call `TestContext::skip()` with a descriptive reason:
 
 ```cpp
-if (result.status() == TestStatus::Error)
+#include <TestExplorer/TestCase.hpp>
+#include <TestExplorer/TestContext.hpp>
+
+using namespace testexplorer;
+
+TestCase databaseIntegration(
+    "database.integration",
+    "Database Integration",
+    [](TestContext& context)
+    {
+        const bool databaseAvailable = false;
+
+        if (!databaseAvailable)
+        {
+            context.skip("Database service is unavailable");
+        }
+
+        // The test continues here only if no skip was requested.
+    }
+);
+```
+
+`skip()` is a non-returning operation. Once called, normal execution of the test body stops and control returns to the runner's skip-handling path.
+
+### Accessing the Skip Reason
+
+The skip reason is available through `TestResult::skipReason()`:
+
+```cpp
+const TestResult result = runner.run(databaseIntegration);
+
+if (result.status() == TestStatus::Skipped)
 {
-    std::cout << result.errorMessage() << '\n';
+    std::cout << "Skipped: "
+              << result.skipReason()
+              << '\n';
 }
 ```
+
+The reason is stored independently from `errorMessage()`. A skip is not treated as an execution error.
+
+### Skip and Assertion Failures
+
+A skip request must not erase assertion failures already recorded by the test.
+
+For example, if a test records an assertion failure and then calls `context.skip()`, the result remains `Failed`. The skip reason can still be retained for diagnostic purposes.
+
+This preserves the distinction between an intentionally skipped test and a test that has already failed.
 
 ---
 
@@ -330,7 +396,7 @@ The registry-aware overload resolves the requested test through `TestRegistry` a
 
 ### Rerunning Failed Tests
 
-TestExplorer can rerun tests that previously finished with `TestStatus::Failed`.
+TestExplorer can rerun tests that previously finished with `TestStatus::Failed`:
 
 ```cpp
 const auto firstRun = runner.runAll(registry);
@@ -346,7 +412,7 @@ std::vector<TestResult> runFailed(
 );
 ```
 
-Only previously failed results are selected for rerun. Results with `Passed`, `Skipped`, or `Error` status are ignored. If a previously failed test is no longer registered, it is skipped.
+Only previously failed results are selected for rerun. Results with `Passed`, `Skipped`, or `Error` status are ignored. If a previously failed test is no longer registered, it is not executed.
 
 The runner does not retain previous results internally; the caller owns and supplies them. This keeps test definitions, execution state, and previous results separate.
 
@@ -436,23 +502,24 @@ TestRunner runner(&reporter);
 const auto results = runner.runAll(registry);
 ```
 
-The reporter displays test names, IDs, statuses, execution durations, failure details, and a final run summary.
+The reporter displays test names, IDs, statuses, execution durations, failure details, skip reasons, and a final run summary.
 
 Example output:
 
 ```text
 Math Addition [math.addition]: PASSED | 400 ns
-Math Subtraction [math.subtraction]: PASSED | 400 ns
 Database Connection [database.connection]: ERROR | 1200 ns
   Error: Connection failed
+Database Integration [database.integration]: SKIPPED | 200 ns
+  Skip reason: Database service is unavailable
 
 === Test Run Summary ===
 Total:    3
-Passed:   2
+Passed:   1
 Failed:   0
 Errors:   1
-Skipped:  0
-Duration: 2000 ns
+Skipped:  1
+Duration: 1800 ns
 ```
 
 The values above are illustrative. The summary includes the total number of results, per-status counts, and the aggregate duration of the reported test executions.
@@ -479,7 +546,9 @@ catch (...)
 
 The current fallback message is `Unknown exception`.
 
-The active `TestContext` is temporary execution state. TestExplorer clears the current context after execution, including exception paths, so stale context state does not leak into subsequent tests. The cleanup mechanism uses RAII, tying cleanup to object lifetime rather than relying on every execution path to perform it manually.
+Test skipping uses a dedicated internal exception type so that the runner can distinguish an intentional skip request from an unexpected execution error.
+
+The active `TestContext` is temporary execution state. TestExplorer clears the current context after execution, including exception and skip paths, so stale context state does not leak into subsequent tests. The cleanup mechanism uses RAII, tying cleanup to object lifetime rather than relying on every execution path to perform it manually.
 
 ---
 
@@ -566,7 +635,7 @@ TestRegistry
      +-- creates TestContext
      +-- activates CurrentTestContext
      +-- executes the test
-     +-- handles exceptions
+     +-- handles assertions, skips, and exceptions
      +-- clears CurrentTestContext
      +-- measures execution duration
      +-- determines execution status
@@ -588,7 +657,7 @@ The architecture aims to keep registration, selection, execution, assertion hand
 
 ### `TestRegistry`
 
-`TestRegistry` stores and organizes registered tests. Its current responsibilities include test registration, access to registered tests, and lookup by test ID. The registry does not execute tests.
+`TestRegistry` stores and organizes registered tests. Its responsibilities include test registration, access to registered tests, and lookup by test ID. The registry does not execute tests.
 
 ### `TestRunner`
 
@@ -601,7 +670,8 @@ The architecture aims to keep registration, selection, execution, assertion hand
 - Failed-test reruns
 - Execution timing
 - Assertion failure collection
-- Exception handling and status determination
+- Skip and exception handling
+- Status determination
 - Active context management
 - Reporter notifications
 
@@ -609,7 +679,7 @@ The runner does not perform assertion comparisons, own the registry, or implemen
 
 ### `TestContext`
 
-`TestContext` represents the execution context of one test. It stores assertion failures generated during execution. A fresh context is created for each test execution.
+`TestContext` represents the execution context of one test. It stores assertion failures generated during execution and provides the explicit skip operation. A fresh context is created for each test execution.
 
 ### `CurrentTestContext`
 
@@ -619,7 +689,7 @@ The runner does not perform assertion comparisons, own the registry, or implemen
 EXPECT_EQ(actual, expected);
 ```
 
-instead of requiring the context to be passed explicitly to every assertion. The current context uses `thread_local` state and is cleared after execution, including exception paths.
+instead of requiring the context to be passed explicitly to every assertion. The current context uses `thread_local` state and is cleared after execution, including exception and skip paths.
 
 ### `TestFailure`
 
@@ -627,7 +697,7 @@ instead of requiring the context to be passed explicitly to every assertion. The
 
 ### `TestResult`
 
-`TestResult` represents one test execution. It contains the test identity, status, duration, assertion failures, and error information where applicable. Keeping `TestResult` separate from `TestCase` allows each execution to produce an independent result.
+`TestResult` represents one test execution. It contains the test identity, status, duration, assertion failures, error information, and skip reason where applicable. Keeping `TestResult` separate from `TestCase` allows each execution to produce an independent result.
 
 ### `TestReporter`
 
@@ -669,7 +739,8 @@ TestExplore/
 │       ├── TestRegistry.hpp
 │       ├── TestReporter.hpp
 │       ├── TestResult.hpp
-│       └── TestRunner.hpp
+│       ├── TestRunner.hpp
+│       └── TestSkipException.hpp
 │
 ├── src/
 │   ├── ConsoleReporter.cpp
@@ -692,6 +763,8 @@ TestExplore/
     ├── test_registration.hpp
     ├── test_runner.cpp
     ├── test_runner.hpp
+    ├── test_skipping.cpp
+    ├── test_skipping.hpp
     ├── test_stability.cpp
     └── test_stability.hpp
 ```
@@ -710,7 +783,7 @@ The framework's own tests are maintained separately from consumer-facing example
 
 ## Development Roadmap
 
-The project is developed incrementally. The checklist below reflects the current implementation status.
+The project is developed incrementally. The checklist below reflects the intended implementation status and should be updated as milestones are verified.
 
 ### Core
 
@@ -726,6 +799,7 @@ The project is developed incrementally. The checklist below reflects the current
 - [x] Execution timing
 - [x] Current test context
 - [x] Exception handling
+- [x] Explicit test skipping
 
 ### Assertions
 
@@ -742,6 +816,7 @@ The project is developed incrementally. The checklist below reflects the current
 - [x] Test run summaries
 - [x] Per-status result counts
 - [x] Aggregate execution duration
+- [x] Skip reason reporting
 - [ ] JSON reporter
 - [ ] XML reporter
 - [ ] Additional structured output formats
@@ -801,7 +876,7 @@ Test selection should remain separate from execution so that suites, tags, and f
 
 ### Reliable Execution
 
-An exception inside one test should produce an error result rather than terminate the entire test run.
+An exception inside one test should produce an error result rather than terminate the entire test run. Intentional skips should be distinguishable from errors and assertion failures.
 
 ### Incremental Development
 
@@ -829,12 +904,13 @@ These may be reconsidered if actual project requirements justify them.
 
 TestExplorer is an experimental open-source project under active development. The API is **not stable** and may change significantly before the first release.
 
-The current implementation has established and validated:
+The implementation aims to establish and validate:
 
 - Core test execution
 - Assertion handling and failure collection
 - Test filtering, suites, and tags
 - Single-test execution and failed-test reruns
+- Explicit test skipping and skip-reason reporting
 - Reporter abstraction and console reporting
 - Test run summaries
 - Exception-safe execution and error results

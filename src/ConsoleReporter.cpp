@@ -32,7 +32,10 @@ namespace testexplorer
         }
     }
 
-    ConsoleReporter::ConsoleReporter(std::ostream &output) : m_output(output) {}
+    ConsoleReporter::ConsoleReporter(std::ostream &output)
+        : m_output(output)
+    {
+    }
 
     void ConsoleReporter::testStarted(const TestCase &test)
     {
@@ -72,6 +75,14 @@ namespace testexplorer
             m_output
                 << "  Error: "
                 << result.errorMessage()
+                << '\n';
+        }
+
+        if (!result.skipReason().empty())
+        {
+            m_output
+                << "  Skip reason: "
+                << result.skipReason()
                 << '\n';
         }
     }
