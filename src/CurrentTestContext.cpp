@@ -10,14 +10,21 @@ namespace testexplorer
         thread_local TestContext *currentContext = nullptr;
     }
 
+    TestContext *CurrentTestContext::exchange(TestContext *context) noexcept
+    {
+        TestContext *previousContext = currentContext;
+        currentContext = context;
+        return previousContext;
+    }
+
     void CurrentTestContext::set(TestContext &context)
     {
-        currentContext = &context;
+        (void)exchange(&context);
     }
 
     void CurrentTestContext::clear()
     {
-        currentContext = nullptr;
+        (void)exchange(nullptr);
     }
 
     TestContext &CurrentTestContext::get()
@@ -30,8 +37,14 @@ namespace testexplorer
 
         return *currentContext;
     }
-}
 
-/*
-یک نکته مهم هم داریم: بعداً که Exception Handling را اضافه کنیم، clear() را باید طوری مدیریت کنیم که حتی اگر تست exception داد هم current context باقی نماند. فعلاً چون Exception Handling هنوز milestone خودش نیست، وارد آن نمی‌شویم.
-*/
+    CurrentTestContext::Scope::Scope(TestContext &context) noexcept
+        : m_previousContext(CurrentTestContext::exchange(&context))
+    {
+    }
+
+    CurrentTestContext::Scope::~Scope() noexcept
+    {
+        (void)CurrentTestContext::exchange(m_previousContext);
+    }
+}

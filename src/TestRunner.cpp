@@ -13,18 +13,6 @@
 
 namespace testexplorer
 {
-    namespace
-    {
-        class TestContextGuard
-        {
-        public:
-            ~TestContextGuard()
-            {
-                CurrentTestContext::clear();
-            }
-        };
-    }
-
     TestRunner::TestRunner(TestReporter *reporter)
         : m_reporter(reporter)
     {
@@ -47,8 +35,7 @@ namespace testexplorer
         {
             TestContext context;
 
-            CurrentTestContext::set(context);
-            TestContextGuard contextGuard;
+            CurrentTestContext::Scope contextScope(context);
 
             const auto start = std::chrono::steady_clock::now();
 

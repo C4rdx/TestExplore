@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <stdexcept>
 
 using namespace testexplorer;
 
@@ -308,6 +309,72 @@ namespace
         return true;
     }
 
+    bool verifyNestedExecutionRestoresContext()
+    {
+        testexplorer::TestRunner nestedRunner;
+
+        bool innerPassed = false;
+        bool innerErrorWasCaptured = false;
+
+        testexplorer::TestCase passingInnerTest(
+            "stability.nested.passing",
+            "Nested Passing Test",
+            [](testexplorer::TestContext &)
+            {
+                EXPECT_TRUE(true);
+            });
+
+        testexplorer::TestCase throwingInnerTest(
+            "stability.nested.throwing",
+            "Nested Throwing Test",
+            [](testexplorer::TestContext &)
+            {
+                throw std::runtime_error("nested execution failure");
+            });
+
+        testexplorer::TestCase outerTest(
+            "stability.nested.outer",
+            "Outer Test After Nested Execution",
+            [&nestedRunner,
+             &passingInnerTest,
+             &throwingInnerTest,
+             &innerPassed,
+             &innerErrorWasCaptured](testexplorer::TestContext &)
+            {
+                EXPECT_TRUE(true);
+
+                const auto passingResult =
+                    nestedRunner.run(passingInnerTest);
+
+                innerPassed =
+                    passingResult.status() == testexplorer::TestStatus::Passed;
+
+                const auto throwingResult =
+                    nestedRunner.run(throwingInnerTest);
+
+                innerErrorWasCaptured =
+                    throwingResult.status() == testexplorer::TestStatus::Error &&
+                    throwingResult.errorMessage() == "nested execution failure";
+
+                // The outer context must be restored after both nested runs.
+                EXPECT_TRUE(true);
+            });
+
+        const auto outerResult = nestedRunner.run(outerTest);
+
+        if (!innerPassed ||
+            !innerErrorWasCaptured ||
+            outerResult.status() != testexplorer::TestStatus::Passed)
+        {
+            std::cerr
+                << "Self-test error: nested test execution did not restore the outer context.\n";
+
+            return false;
+        }
+
+        return true;
+    }
+
     bool verifyRepeatedExecutionIsolation()
     {
         testexplorer::TestRunner runner;
@@ -389,6 +456,11 @@ bool runStabilityTests(
     if (!verifyTestResultConsistency(
             registry,
             exceptionRegistry))
+    {
+        return false;
+    }
+
+    if (!verifyNestedExecutionRestoresContext())
     {
         return false;
     }
