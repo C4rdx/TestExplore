@@ -14,9 +14,16 @@ namespace testexplorer
     template <typename T>
     std::string formatValue(const T &value)
     {
-        std::ostringstream stream;
-        stream << value;
-        return stream.str();
+        if constexpr (requires(std::ostream &stream) { stream << value; })
+        {
+            std::ostringstream stream;
+            stream << value;
+            return stream.str();
+        }
+        else
+        {
+            return "<unprintable>";
+        }
     }
 
     inline void expectTrue(
