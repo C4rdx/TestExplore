@@ -131,6 +131,11 @@ namespace testexplorer
         const TestRegistry &registry,
         TestFilter filter)
     {
+        if (!filter)
+        {
+            throw std::invalid_argument("Test filter must not be empty.");
+        }
+
         std::vector<TestResult> results;
 
         for (const TestCase &test : registry.tests())

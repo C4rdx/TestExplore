@@ -29,6 +29,7 @@ namespace testexplorer
         std::vector<TestResult> runAll(
             const TestRegistry &registry);
 
+        // Throws std::invalid_argument when the filter is empty.
         std::vector<TestResult> runAll(
             const TestRegistry &registry,
             TestFilter filter);

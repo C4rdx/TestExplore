@@ -116,6 +116,26 @@ namespace
         return true;
     }
 
+    bool verifyEmptyFilterFunction(
+        testexplorer::TestRunner &runner,
+        testexplorer::TestRegistry &registry)
+    {
+        try
+        {
+            runner.runAll(registry, testexplorer::TestFilter{});
+        }
+        catch (const std::invalid_argument &)
+        {
+            return true;
+        }
+        catch (...)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
     bool verifyEmptyFilter(
         const std::vector<testexplorer::TestResult> &results)
     {
@@ -441,6 +461,15 @@ bool runRunnerTests(
 
     if (!verifyEmptyFilter(emptyResults))
     {
+        return false;
+    }
+
+    // Empty callable filter must be rejected.
+    if (!verifyEmptyFilterFunction(runner, registry))
+    {
+        std::cerr
+            << "Self-test error: an empty filter should throw "
+            << "std::invalid_argument.\n";
         return false;
     }
 
