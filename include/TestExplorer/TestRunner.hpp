@@ -3,7 +3,6 @@
 
 #include <TestExplorer/TestFilter.hpp>
 #include <TestExplorer/TestResult.hpp>
-#include <TestExplorer/TestSkipException.hpp>
     
 #include <vector>
 

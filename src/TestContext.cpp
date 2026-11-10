@@ -1,5 +1,5 @@
 #include <TestExplorer/TestContext.hpp>
-#include <TestExplorer/TestSkipException.hpp>
+#include "detail/TestSkipException.hpp"
 
 #include <utility>
 

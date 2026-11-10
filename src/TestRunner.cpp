@@ -4,7 +4,7 @@
 #include <TestExplorer/TestContext.hpp>
 #include <TestExplorer/TestRegistry.hpp>
 #include <TestExplorer/TestReporter.hpp>
-#include <TestExplorer/TestSkipException.hpp>
+#include "detail/TestSkipException.hpp"
 
 #include <chrono>
 #include <stdexcept>
