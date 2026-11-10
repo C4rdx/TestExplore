@@ -1,11 +1,18 @@
 #include <TestExplorer/TestRegistry.hpp>
 
+#include <stdexcept>
 #include <utility>
 
 namespace testexplorer
 {
     void TestRegistry::registerTest(TestCase test)
     {
+        if (find(test.id()) != nullptr)
+        {
+            throw std::invalid_argument(
+                "A test with ID '" + test.id() + "' is already registered.");
+        }
+
         m_tests.push_back(std::move(test));
     }
 

@@ -16,6 +16,57 @@ using namespace testexplorer;
 
 namespace
 {
+    bool verifyDuplicateTestRegistration()
+    {
+        TestRegistry registry;
+
+        registry.registerTest(TestCase(
+            "registry.duplicate",
+            "Original Test",
+            [](TestContext &) {}));
+
+        if (registry.tests().size() != 1 ||
+            registry.find("registry.duplicate") == nullptr)
+        {
+            return false;
+        }
+
+        try
+        {
+            registry.registerTest(TestCase(
+                "registry.duplicate",
+                "Duplicate Test",
+                [](TestContext &) {}));
+
+            return false;
+        }
+        catch (const std::invalid_argument &)
+        {
+            // Expected.
+        }
+        catch (...)
+        {
+            return false;
+        }
+
+        const TestCase *original = registry.find("registry.duplicate");
+
+        if (original == nullptr ||
+            original->name() != "Original Test" ||
+            registry.tests().size() != 1)
+        {
+            return false;
+        }
+
+        registry.registerTest(TestCase(
+            "Registry.Duplicate",
+            "Case-Sensitive ID",
+            [](TestContext &) {}));
+
+        return registry.tests().size() == 2 &&
+               registry.find("Registry.Duplicate") != nullptr;
+    }
+
     bool verifyMathFilter(
         const std::vector<testexplorer::TestResult> &results)
     {
@@ -335,6 +386,12 @@ bool runRunnerTests(
     testexplorer::TestRunner &runner,
     testexplorer::TestRegistry &registry)
 {
+    // Verify that duplicate test IDs are rejected.
+    if (!verifyDuplicateTestRegistration())
+    {
+        return false;
+    }
+
     // Verify that the console reporter produces a correct test run summary.
     if (!verifyConsoleReporterSummary())
     {
